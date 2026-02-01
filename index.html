@@ -1,0 +1,2101 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global Stock AI Screener - 全世界株式スクリーナー</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --bg-darker: #020617;
+            --bg-card: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-blue: #3b82f6;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --accent-orange: #f59e0b;
+            --accent-purple: #8b5cf6;
+            --radius: 12px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-main);
+            min-height: 100vh;
+        }
+
+        .app {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 220px;
+            background: var(--bg-darker);
+            padding: 20px;
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--accent-blue);
+            margin-bottom: 30px;
+        }
+
+        .nav-item {
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            cursor: pointer;
+            color: var(--text-muted);
+            transition: all 0.2s;
+        }
+
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+        }
+
+        .nav-item.active {
+            background: var(--accent-blue);
+            color: white;
+        }
+
+        .sidebar-footer {
+            margin-top: auto;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .api-status {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .api-status.ok {
+            color: var(--accent-green);
+        }
+
+        .main {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+            max-height: 100vh;
+        }
+
+        .section {
+            display: none;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        h2 {
+            font-size: 1.4rem;
+            margin-bottom: 20px;
+        }
+
+        .heatmap-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+            gap: 8px;
+            margin-bottom: 25px;
+        }
+
+        .heatmap-tile {
+            padding: 15px 8px;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.2s;
+            color: white;
+        }
+
+        .heatmap-tile:hover {
+            transform: scale(1.05);
+        }
+
+        .heatmap-tile .symbol {
+            font-weight: 700;
+            font-size: 0.85rem;
+        }
+
+        .heatmap-tile .change {
+            font-size: 0.75rem;
+            opacity: 0.9;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card h3 {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            margin-bottom: 15px;
+        }
+
+        .stock-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        .stock-table th,
+        .stock-table td {
+            padding: 10px 8px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .stock-table th {
+            color: var(--text-muted);
+            font-weight: 500;
+            font-size: 0.8rem;
+        }
+
+        .stock-table .clickable {
+            font-weight: 600;
+            color: var(--accent-blue);
+            cursor: pointer;
+        }
+
+        .positive {
+            color: var(--accent-green);
+        }
+
+        .negative {
+            color: var(--accent-red);
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--accent-blue);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: var(--bg-card);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-muted);
+        }
+
+        .btn-danger {
+            background: var(--accent-red);
+            color: white;
+        }
+
+        .btn-sm {
+            padding: 4px 10px;
+            font-size: 0.8rem;
+        }
+
+        .filter-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .filter-tab {
+            padding: 8px 14px;
+            background: var(--bg-card);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        .filter-tab.active,
+        .filter-tab:hover {
+            background: rgba(59, 130, 246, 0.15);
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+
+        .text-input {
+            width: 100%;
+            min-height: 120px;
+            background: var(--bg-card);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px;
+            color: white;
+            font-family: inherit;
+            resize: vertical;
+            margin-bottom: 12px;
+        }
+
+        .input-field {
+            width: 100%;
+            background: var(--bg-card);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 10px 12px;
+            color: white;
+            font-size: 0.9rem;
+            margin-bottom: 12px;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        .tags-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 15px;
+        }
+
+        .tag {
+            padding: 6px 12px;
+            background: var(--accent-blue);
+            border-radius: 20px;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+
+        .tag:hover {
+            background: var(--accent-green);
+        }
+
+        .watchlist-section {
+            margin-bottom: 25px;
+        }
+
+        .watchlist-section h4 {
+            font-size: 0.9rem;
+            color: var(--accent-purple);
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .watchlist-compact {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .watchlist-item {
+            background: var(--bg-card);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .watchlist-item:hover {
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .watchlist-item .sym {
+            font-weight: 600;
+            color: var(--accent-blue);
+        }
+
+        .watchlist-item .price {
+            font-family: 'JetBrains Mono';
+            font-size: 0.8rem;
+        }
+
+        .watchlist-item .del {
+            color: var(--accent-red);
+            cursor: pointer;
+            font-size: 0.7rem;
+        }
+
+        .wl-actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+        }
+
+        .modal-content {
+            position: relative;
+            background: var(--bg-card);
+            width: 90%;
+            max-width: 1000px;
+            max-height: 90vh;
+            overflow-y: auto;
+            border-radius: var(--radius);
+            padding: 25px;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 12px;
+            right: 15px;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+        }
+
+        .modal-title h2 {
+            font-size: 1.8rem;
+            color: var(--accent-blue);
+            margin-bottom: 4px;
+        }
+
+        .modal-title p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .modal-price {
+            text-align: right;
+        }
+
+        .modal-price .price {
+            font-size: 1.8rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono';
+        }
+
+        .ai-box {
+            background: rgba(59, 130, 246, 0.08);
+            border: 1px solid var(--accent-blue);
+            border-radius: var(--radius);
+            padding: 18px;
+            margin-bottom: 20px;
+        }
+
+        .ai-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .ai-verdict {
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 0.85rem;
+        }
+
+        .ai-verdict.buy {
+            background: var(--accent-green);
+            color: #022c22;
+        }
+
+        .ai-verdict.hold {
+            background: var(--accent-orange);
+            color: #422006;
+        }
+
+        .ai-verdict.sell {
+            background: var(--accent-red);
+            color: #450a0a;
+        }
+
+        .score-bar {
+            display: flex;
+            align-items: center;
+            margin-bottom: 6px;
+            font-size: 0.8rem;
+        }
+
+        .score-bar label {
+            width: 90px;
+            color: var(--text-muted);
+        }
+
+        .score-bar-bg {
+            flex: 1;
+            height: 6px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .score-bar-fill {
+            height: 100%;
+            background: var(--accent-blue);
+            transition: width 0.5s;
+        }
+
+        .perf-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .perf-item {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 10px 6px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .perf-item .label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .perf-item .value {
+            font-family: 'JetBrains Mono';
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .ext-links {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .ext-link {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: white;
+        }
+
+        .ext-link.investing {
+            background: #dc2626;
+        }
+
+        .ext-link.seeking {
+            background: #ea580c;
+        }
+
+        .chart-container {
+            height: 400px;
+        }
+
+        .loading {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .error-msg {
+            color: var(--accent-red);
+            font-size: 0.9rem;
+            padding: 15px;
+            background: rgba(239, 68, 68, 0.1);
+            border-radius: 8px;
+        }
+
+        /* Watchlist Chart Enhancements */
+        .watchlist-item-wrapper {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .btn-icon-sm {
+            background: none;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-bright);
+            padding: 4px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .btn-icon-sm:hover {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: var(--accent-blue);
+        }
+
+        .range-btn-sm {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-muted);
+            padding: 4px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+
+        .range-btn-sm.active {
+            background: var(--accent-blue);
+            color: white;
+            border-color: var(--accent-blue);
+        }
+
+        .range-btn-sm:hover {
+            border-color: var(--accent-blue);
+        }
+
+        /* AI Q&A */
+        .text-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-bright);
+            padding: 10px;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            resize: vertical;
+        }
+
+        .text-input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        /* Chart Controls */
+        .range-buttons {
+            display: flex;
+            gap: 6px;
+        }
+
+        .range-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-muted);
+            padding: 6px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .range-btn.active {
+            background: var(--accent-blue);
+            color: white;
+            border-color: var(--accent-blue);
+        }
+
+        .range-btn:hover {
+            border-color: var(--accent-blue);
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+
+            .app {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app">
+        <nav class="sidebar">
+            <div class="logo">🚀 Global AI Trade</div>
+            <div class="nav-item active" data-section="dashboard">📊 マーケット概況</div>
+            <div class="nav-item" data-section="screener">🔍 スクリーナー</div>
+            <div class="nav-item" data-section="smart-input">📝 スマート入力</div>
+            <div class="nav-item" data-section="watchlist">⭐ ウォッチリスト (<span id="wl-count">0</span>)</div>
+            <div class="sidebar-footer">
+                <div id="api-finnhub" class="api-status">Finnhub: 未設定</div>
+                <div id="api-alpha" class="api-status">Alpha Vantage: 未設定</div>
+                <button class="btn btn-primary btn-sm" onclick="openSettings()" style="width:100%;margin-top:10px">⚙️
+                    API設定</button>
+            </div>
+        </nav>
+
+        <main class="main">
+            <!-- Dashboard -->
+            <section id="sec-dashboard" class="section active">
+                <h2>🌏 セクター・ヒートマップ (米国)</h2>
+                <div id="heatmap" class="heatmap-grid">
+                    <p class="loading">データ取得中...</p>
+                </div>
+                <div class="grid-2">
+                    <div class="card">
+                        <h3>📈 本日の急騰銘柄</h3>
+                        <div id="gainers-list">
+                            <p class="loading">データ取得中...</p>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>📉 本日の急落銘柄</h3>
+                        <div id="losers-list">
+                            <p class="loading">データ取得中...</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Screener -->
+            <section id="sec-screener" class="section">
+                <h2>🔍 スマート・スクリーナー</h2>
+                <div class="filter-tabs">
+                    <div class="filter-tab active" data-filter="gainers">🚀 急騰</div>
+                    <div class="filter-tab" data-filter="losers">📉 急落</div>
+                    <div class="filter-tab" data-filter="active">🔥 出来高急増</div>
+                </div>
+                <div class="card">
+                    <table class="stock-table">
+                        <thead>
+                            <tr>
+                                <th>銘柄</th>
+                                <th>価格</th>
+                                <th>変動</th>
+                                <th>出来高</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="screener-body">
+                            <tr>
+                                <td colspan="5" class="loading">データ取得中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Smart Input -->
+            <section id="sec-smart-input" class="section">
+                <h2>📝 スマート入力</h2>
+                <div class="card">
+                    <p style="color:var(--text-muted);margin-bottom:12px;font-size:0.9rem;">
+                        ニュース記事やメモを貼り付け、または画像をアップロード。ティッカー(NVDA)や企業名(部分一致可)を自動検出します。</p>
+                    <textarea id="nlp-input" class="text-input" placeholder=""></textarea>
+                    <div style="display:flex;gap:8px;margin-top:10px">
+                        <button id="analyze-btn" class="btn btn-primary" style="flex:1">🔍 テキスト解析</button>
+                        <button class="btn btn-secondary" style="flex:1"
+                            onclick="document.getElementById('image-upload').click()">📷 画像から抽出</button>
+                    </div>
+                    <input type="file" id="image-upload" accept="image/*" style="display:none">
+                    <div id="image-preview" style="margin-top:10px;display:none">
+                        <img id="preview-img" style="max-width:100%;max-height:300px;border-radius:8px">
+                        <p id="ocr-status" style="margin-top:8px;font-size:0.85rem;color:var(--text-muted)"></p>
+                    </div>
+                    <div id="extracted-tags" class="tags-container"></div>
+                </div>
+            </section>
+
+            <!-- Watchlist -->
+            <section id="sec-watchlist" class="section">
+                <div class="card-header">
+                    <h2 class="section-title">⭐ マイ・ウォッチリスト</h2>
+                    <div class="action-bar" id="wl-actions">
+                        <div id="export-link-container" style="display:inline-block;margin-right:10px"></div>
+                        <button class="btn btn-sm btn-outline" onclick="exportWatchlist()">📊 エクスポート</button>
+                        <button class="btn btn-sm btn-outline"
+                            onclick="document.getElementById('import-file').click()">📁 ファイル読込</button>
+                        <input type="file" id="import-file" style="display:none" onchange="importWatchlist(event)">
+                    </div>
+                </div>
+                <div id="watchlist-container">
+                    <p class="loading">ウォッチリストは空です</p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content" style="max-width:450px">
+            <button class="modal-close" onclick="closeSettings()">&times;</button>
+            <h2 style="margin-bottom:20px">🔑 API設定</h2>
+            <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:20px">APIキーはブラウザのローカルストレージに保存されます。</p>
+            <label style="display:block;margin-bottom:6px;font-size:0.85rem">Finnhub API Key <span
+                    style="color:var(--accent-red)">*推奨</span></label>
+            <input type="password" id="input-finnhub" class="input-field" placeholder="Finnhub APIキー">
+            <label style="display:block;margin-bottom:6px;font-size:0.85rem;margin-top:10px">Alpha Vantage API
+                Key</label>
+            <input type="password" id="input-alpha" class="input-field" placeholder="Alpha Vantage APIキー（オプション）">
+            <label style="display:block;margin-bottom:6px;font-size:0.85rem;margin-top:10px">Perplexity API Key</label>
+            <input type="password" id="input-perplexity" class="input-field" placeholder="Perplexity APIキー（AI Q&A用）">
+            <button class="btn btn-primary" onclick="saveSettings()" style="width:100%;margin-top:10px">保存</button>
+        </div>
+    </div>
+
+    <!-- Stock Modal with AI Q&A -->
+    <div id="stock-modal" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <button class="modal-close">&times;</button>
+            <div class="modal-header">
+                <div class="modal-title">
+                    <h2 id="m-symbol">--</h2>
+                    <p id="m-name">--</p>
+                </div>
+                <div class="modal-price">
+                    <div id="m-price" class="price">--</div>
+                    <div id="m-change">--</div>
+                </div>
+            </div>
+            <div class="ai-box">
+                <div class="ai-header">
+                    <h3 style="font-size:0.95rem">🤖 AI トレード・アドバイザー</h3><span id="ai-verdict"
+                        class="ai-verdict">--</span>
+                </div>
+                <div class="score-bar"><label>Momentum</label>
+                    <div class="score-bar-bg">
+                        <div id="score-mom" class="score-bar-fill"></div>
+                    </div>
+                </div>
+                <div class="score-bar"><label>Fundamental</label>
+                    <div class="score-bar-bg">
+                        <div id="score-fund" class="score-bar-fill"></div>
+                    </div>
+                </div>
+                <div class="score-bar"><label>Sentiment</label>
+                    <div class="score-bar-bg">
+                        <div id="score-sent" class="score-bar-fill" style="background:var(--accent-orange)"></div>
+                    </div>
+                </div>
+                <p id="ai-reasoning" style="margin-top:12px;font-size:0.9rem;line-height:1.5;color:var(--text-muted)">
+                    分析中...</p>
+
+                <!-- AI Q&A Section -->
+                <div style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.1);padding-top:15px">
+                    <h4 style="font-size:0.9rem;margin-bottom:10px">💬 AIに質問</h4>
+                    <textarea id="ai-question" class="text-input" style="min-height:60px;margin-bottom:8px"
+                        placeholder="例: この銘柄の今後の見通しは？"></textarea>
+                    <button id="btn-ask-ai" class="btn btn-primary btn-sm" style="width:100%">質問する</button>
+                    <div id="ai-answer"
+                        style="margin-top:10px;padding:10px;background:rgba(0,0,0,0.2);border-radius:8px;display:none;font-size:0.85rem;line-height:1.6">
+                    </div>
+                </div>
+            </div>
+            <div class="perf-grid">
+                <div class="perf-item">
+                    <div class="label">1W</div>
+                    <div id="p-1w" class="value">--</div>
+                </div>
+                <div class="perf-item">
+                    <div class="label">1M</div>
+                    <div id="p-1m" class="value">--</div>
+                </div>
+                <div class="perf-item">
+                    <div class="label">3M</div>
+                    <div id="p-3m" class="value">--</div>
+                </div>
+                <div class="perf-item">
+                    <div class="label">6M</div>
+                    <div id="p-6m" class="value">--</div>
+                </div>
+                <div class="perf-item">
+                    <div class="label">1Y</div>
+                    <div id="p-1y" class="value">--</div>
+                </div>
+            </div>
+            <div class="ext-links">
+                <a id="link-investing" href="#" target="_blank" class="ext-link investing">Investing.com</a>
+                <a id="link-seeking" href="#" target="_blank" class="ext-link seeking">Seeking Alpha</a>
+            </div>
+
+            <!-- Chart Controls -->
+            <div style="border-top:1px solid rgba(255,255,255,0.1);padding-top:15px;margin-top:15px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                    <div class="range-buttons">
+                        <button class="range-btn" data-range="1D">1日</button>
+                        <button class="range-btn" data-range="1W">1週</button>
+                        <button class="range-btn" data-range="1M">1月</button>
+                        <button class="range-btn" data-range="3M">3月</button>
+                        <button class="range-btn" data-range="6M">6月</button>
+                        <button class="range-btn active" data-range="1Y">1年</button>
+                    </div>
+                </div>
+                <div class="chart-options"
+                    style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:0.85rem">
+                    <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+                        <input type="checkbox" id="opt-ma20" style="cursor:pointer"> MA20
+                    </label>
+                    <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+                        <input type="checkbox" id="opt-ma50" style="cursor:pointer"> MA50
+                    </label>
+                    <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+                        <input type="checkbox" id="opt-index" style="cursor:pointer"> 指数比較
+                    </label>
+                    <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+                        <input type="checkbox" id="opt-volume" style="cursor:pointer"> 出来高
+                    </label>
+                    <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+                        <input type="checkbox" id="opt-events" checked style="cursor:pointer"> イベント
+                    </label>
+                </div>
+            </div>
+
+            <div class="chart-container"><canvas id="modal-chart"></canvas></div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // GLOBAL CONFIG & PROXY
+        // ============================================
+        window.PROXIES = [
+            'https://api.codetabs.com/v1/proxy?quest=',
+            'https://api.allorigins.win/raw?url=',
+            'https://corsproxy.io/?'
+        ];
+
+        window.proxyFetch = async function (url, isJson = true) {
+            // Sequential attempt for stability on file:// protocol
+            for (const proxy of window.PROXIES) {
+                try {
+                    const controller = new AbortController();
+                    const id = setTimeout(() => controller.abort(), 5000); // 5s per proxy
+                    const res = await fetch(proxy + encodeURIComponent(url), { signal: controller.signal });
+                    clearTimeout(id);
+                    if (res.ok) {
+                        return isJson ? await res.json() : await res.text();
+                    }
+                } catch (e) { continue; }
+            }
+            return null;
+        };
+
+        const state = window.state = {
+            watchlist: JSON.parse(localStorage.getItem('gss_watchlist') || '[]'),
+            finnhubKey: localStorage.getItem('gss_finnhub_key') || '',
+            alphaKey: localStorage.getItem('gss_alpha_key') || '',
+            perplexityKey: localStorage.getItem('gss_perplexity_key') || 'pplx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+            currentSymbol: null,
+            currentRange: '1Y',
+            events: [],
+            chartCache: {},
+            quoteCache: {} // Store { symbol: { price, changePercent, timestamp } }
+        };
+
+        // Sector ETF to Name mapping
+        const SECTOR_NAMES = {
+            'XLK': 'Technology',
+            'XLF': 'Finance',
+            'XLV': 'Healthcare',
+            'XLE': 'Energy',
+            'XLY': 'Consumer',
+            'XLI': 'Industrial',
+            'XLU': 'Utilities',
+            'XLP': 'Staples',
+            'XLRE': 'RealEstate',
+            'XLB': 'Materials',
+            'XLC': 'Communications'
+        };
+
+        // Sector classification
+        const SECTOR_MAP = {
+            'Technology': ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'META', 'AVGO', 'ORCL', 'CRM', 'AMD', 'INTC', 'CSCO',
+                'ADBE', 'IBM', 'QCOM', 'TXN'],
+            'Healthcare': ['UNH', 'JNJ', 'LLY', 'PFE', 'ABBV', 'MRK', 'TMO', 'ABT', 'DHR', 'BMY', 'AMGN'],
+            'Finance': ['JPM', 'V', 'MA', 'BAC', 'WFC', 'GS', 'MS', 'AXP', 'BLK', 'SCHW', 'C'],
+            'Consumer': ['AMZN', 'TSLA', 'HD', 'MCD', 'NKE', 'SBUX', 'TGT', 'LOW', 'COST', 'WMT', 'PG', 'KO', 'PEP'],
+            'Energy': ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PSX', 'VLO', 'OXY'],
+            'Industrial': ['CAT', 'HON', 'UNP', 'RTX', 'BA', 'GE', 'LMT', 'DE', 'MMM', 'UPS'],
+            'Other': []
+        };
+
+        // COMPANY_NAMES dictionary removed. Using Perplexity AI now.
+
+        // ============================================
+        // API - Yahoo Finance (via Proxy) - Primary for Gainers/Losers
+        // ============================================
+        // Removed sequential proxyFetch loop
+
+        async function getYahooScreener(type) {
+            const scrIds = { gainers: 'day_gainers', losers: 'day_losers', active: 'most_actives' };
+            const data = await
+                proxyFetch(`https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?scrIds=${scrIds[type]}&count=15`);
+            return data?.finance?.result?.[0]?.quotes || [];
+        }
+
+        async function getYahooQuote(symbol) {
+            const data = await proxyFetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`);
+            const q = data?.quoteResponse?.result?.[0];
+            if (!q) return null;
+            return {
+                symbol: q.symbol,
+                price: q.regularMarketPrice,
+                change: q.regularMarketChange,
+                changePercent: q.regularMarketChangePercent,
+                high: q.regularMarketDayHigh,
+                low: q.regularMarketDayLow,
+                open: q.regularMarketOpen,
+                prevClose: q.regularMarketPreviousClose
+            };
+        }
+
+        async function getYahooMultiQuotes(symbols) {
+            if (!symbols.length) return [];
+            const data = await proxyFetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols.join(',')}`);
+            const quotes = data?.quoteResponse?.result || [];
+            return quotes.map(q => ({
+                symbol: q.symbol,
+                price: q.regularMarketPrice,
+                change: q.regularMarketChange,
+                changePercent: q.regularMarketChangePercent,
+                high: q.regularMarketDayHigh,
+                low: q.regularMarketDayLow,
+                open: q.regularMarketOpen,
+                prevClose: q.regularMarketPreviousClose
+            }));
+        }
+
+        async function getYahooChart(symbol, range = '1y') {
+            const data = await
+                proxyFetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=${range}&interval=1d`);
+            const result = data?.chart?.result?.[0];
+            if (!result) return [];
+            const ts = result.timestamp || [];
+            const q = result.indicators?.quote?.[0] || {};
+            return ts.map((t, i) => ({ time: t * 1000, close: q.close?.[i], volume: q.volume?.[i] })).filter(d =>
+                d.close != null);
+        }
+
+        // ============================================
+        // API - Finnhub (Fallback)
+        // ============================================
+        async function finnhubFetch(endpoint) {
+            if (!state.finnhubKey) return null;
+            try {
+                const url = `https://finnhub.io/api/v1/${endpoint}${endpoint.includes('?') ? '&' :
+                    '?'}token=${state.finnhubKey}`;
+                const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+                if (!resp.ok) return null;
+                return await resp.json();
+            } catch (e) {
+                console.error('Finnhub error:', e);
+                return null;
+            }
+        }
+
+        async function getFinnhubQuote(symbol) {
+            const data = await finnhubFetch(`quote?symbol=${symbol}`);
+            if (!data || data.c === 0) return null;
+            return {
+                symbol,
+                price: data.c,
+                change: data.d,
+                changePercent: data.dp,
+                high: data.h,
+                low: data.l,
+                open: data.o,
+                prevClose: data.pc
+            };
+        }
+
+        async function getFinnhubCandles(symbol, days = 365) {
+            const to = Math.floor(Date.now() / 1000);
+            const from = to - days * 24 * 60 * 60;
+            const data = await finnhubFetch(`stock/candle?symbol=${symbol}&resolution=D&from=${from}&to=${to}`);
+            if (!data || data.s !== 'ok') return [];
+            return data.t.map((t, i) => ({ time: t * 1000, close: data.c[i], volume: data.v?.[i] }));
+        }
+
+        async function getRecommendations(symbol) {
+            return await finnhubFetch(`stock/recommendation?symbol=${symbol}`);
+        }
+
+        async function getCompanyProfile(symbol) {
+            return await finnhubFetch(`stock/profile2?symbol=${symbol}`);
+        }
+
+        // ============================================
+        // API - Alpha Vantage (Fallback)
+        // ============================================
+        async function alphaFetch(func, symbol) {
+            if (!state.alphaKey) return null;
+            try {
+                const resp = await
+                    fetch(`https://www.alphavantage.co/query?function=${func}&symbol=${symbol}&apikey=${state.alphaKey}`, {
+                        signal: AbortSignal.timeout(10000)
+                    });
+                if (!resp.ok) return null;
+                return await resp.json();
+            } catch (e) {
+                console.error('Alpha Vantage error:', e);
+                return null;
+            }
+        }
+
+        async function getAlphaQuote(symbol) {
+            const data = await alphaFetch('GLOBAL_QUOTE', symbol);
+            const q = data?.['Global Quote'];
+            if (!q || !q['05. price']) return null;
+            return {
+                symbol,
+                price: parseFloat(q['05. price']),
+                change: parseFloat(q['09. change']),
+                changePercent: parseFloat(q['10. change percent']?.replace('%', '')),
+                high: parseFloat(q['03. high']),
+                low: parseFloat(q['04. low']),
+                open: parseFloat(q['02. open']),
+                prevClose: parseFloat(q['08. previous close'])
+            };
+        }
+
+        // ============================================
+        // Unified API with Fallback: Yahoo -> Finnhub -> Alpha Vantage
+        // ============================================
+        async function getQuote(symbol) {
+            // 1. Fast path: Finnhub (No proxy needed)
+            if (state.finnhubKey) {
+                try {
+                    const f = await getFinnhubQuote(symbol);
+                    if (f) return f;
+                } catch (e) { }
+            }
+
+            // 2. Main path: Yahoo via Proxy
+            const y = await getYahooQuote(symbol);
+            if (y) {
+                // Correct GBp to GBP
+                if (symbol.endsWith('.L') && y.price > 100) {
+                    y.price /= 100;
+                    y.change /= 100;
+                }
+                return y;
+            }
+
+            // 3. Fallback: Alpha Vantage
+            if (state.alphaKey) return await getAlphaQuote(symbol);
+            return null;
+        }
+
+        async function getMultiQuotes(symbols) {
+            if (!symbols.length) return [];
+            console.log(`📡 Updating ${symbols.length} items...`);
+
+            // Try batch via Yahoo
+            let results = await getYahooMultiQuotes(symbols);
+            if (results && results.length > 0) {
+                results.forEach(q => {
+                    if (q.symbol.endsWith('.L') && q.price > 100) {
+                        q.price /= 100;
+                        q.change /= 100;
+                    }
+                });
+                return results;
+            }
+
+            // Individual fallback
+            console.warn('Batch failed, using individual update');
+            results = await Promise.all(symbols.map(s => getQuote(s)));
+            return results.filter(r => r);
+        }
+
+        // ============================================
+        // EVENTS
+        // ============================================
+        async function getExternalEvents(symbol) {
+            const events = [];
+            const promises = [];
+
+            if (state.finnhubKey) {
+                promises.push((async () => {
+                    try {
+                        const today = new Date();
+                        const from = new Date(today.getFullYear() - 2, 0, 1).toISOString().split('T')[0];
+                        const to = new Date(today.getFullYear() + 1, 11, 31).toISOString().split('T')[0];
+                        const [fE, hE, dE] = await Promise.all([
+                            finnhubFetch(`calendar/earnings?symbol=${symbol}&from=${from}&to=${to}`),
+                            finnhubFetch(`stock/earnings?symbol=${symbol}`),
+                            finnhubFetch(`stock/dividend?symbol=${symbol}&from=${from}&to=${to}`)
+                        ]);
+                        if (fE?.earningsCalendar) fE.earningsCalendar.forEach(e => events.push({ type: 'earnings', date: e.date }));
+
+                        // Limit historical earnings to roughly last 2 years to prevent massive duplicates
+                        if (Array.isArray(hE)) {
+                            const twoYearsAgo = new Date(today.getFullYear() - 2, 0, 1).toISOString();
+                            hE.forEach(e => {
+                                if (e.period && e.period >= twoYearsAgo) events.push({ type: 'earnings', date: e.period });
+                            });
+                        }
+                        if (Array.isArray(dE)) dE.forEach(d => events.push({ type: 'dividend', date: d.date }));
+                    } catch (e) { }
+                })());
+            }
+
+            if (state.alphaKey) {
+                promises.push((async () => {
+                    try {
+                        const [eRes, dRes] = await Promise.all([
+                            fetch(`https://www.alphavantage.co/query?function=EARNINGS&symbol=${symbol}&apikey=${state.alphaKey}`).then(r => r.json()),
+                            fetch(`https://www.alphavantage.co/query?function=DIVIDENDS&symbol=${symbol}&apikey=${state.alphaKey}`).then(r => r.json())
+                        ]);
+                        if (eRes?.quarterlyEarnings) eRes.quarterlyEarnings.forEach(e => { if (e.reportedDate) events.push({ type: 'earnings', date: e.reportedDate }); });
+                        if (dRes?.data) dRes.data.forEach(d => { if (d.ex_dividend_date) events.push({ type: 'dividend', date: d.ex_dividend_date }); });
+                    } catch (e) { }
+                })());
+            }
+
+            await Promise.allSettled(promises);
+            return events; // Deduplication will be handled in fetchUnifiedData
+        }
+
+        async function fetchUnifiedData(symbol, force = false) {
+            // Check cache (valid for 1 hour)
+            const cache = state.chartCache[symbol];
+            if (!force && cache && (Date.now() - cache.timestamp < 3600000)) {
+                console.log(`🚀 Using cached data for ${symbol}`);
+                return cache;
+            }
+
+            console.log(`📡 Fetching fresh 1Y data for ${symbol}...`);
+            const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=1y&interval=1d&events=div%2Csplit%2Cearn`;
+            const yahooData = await window.proxyFetch(yahooUrl).catch(() => null);
+            const res = yahooData?.chart?.result?.[0];
+
+            let chart = [], events = [];
+            if (res && res.timestamp) {
+                const ts = res.timestamp || [];
+                const q = res.indicators?.quote?.[0] || {};
+                chart = ts.map((t, i) => ({ time: t * 1000, close: q.close?.[i], volume: q.volume?.[i] })).filter(d => d.close != null);
+                if (res.events) {
+                    if (res.events.dividends) Object.values(res.events.dividends).forEach(d => events.push({ type: 'dividend', date: new Date(d.date * 1000).toISOString().split('T')[0] }));
+                    if (res.events.earnings) Object.values(res.events.earnings).forEach(e => events.push({ type: 'earnings', date: new Date(e.date * 1000).toISOString().split('T')[0] }));
+                }
+            }
+
+            const extraEvents = await getExternalEvents(symbol);
+            const combined = [...events, ...extraEvents];
+
+            // Fuzzy deduplication: earnings (30 days), others (7 days)
+            const finalEvents = [];
+            const sorted = combined.filter(e => e.date).sort((a, b) => a.date.localeCompare(b.date));
+
+            for (const eve of sorted) {
+                const existingIdx = finalEvents.findIndex(existing => {
+                    if (existing.type !== eve.type) return false;
+                    const d1 = new Date(existing.date);
+                    const d2 = new Date(eve.date);
+                    const diffDays = Math.abs(d1 - d2) / (1000 * 60 * 60 * 24);
+                    const threshold = (eve.type === 'earnings') ? 30 : 7;
+                    return diffDays <= threshold;
+                });
+
+                if (existingIdx !== -1) {
+                    // If earnings duplicate, keep the later one (announcement date)
+                    if (eve.type === 'earnings' && eve.date > finalEvents[existingIdx].date) {
+                        finalEvents[existingIdx] = eve;
+                    }
+                } else {
+                    finalEvents.push(eve);
+                }
+            }
+
+            if (chart.length === 0) chart = await getFinnhubCandles(symbol, 365);
+
+            const data = { chart, events: finalEvents, timestamp: Date.now() };
+            state.chartCache[symbol] = data;
+            return data;
+        }
+
+        async function getCandles(symbol, days = 365) {
+            const data = await fetchUnifiedData(symbol);
+            state.events = data.events || [];
+            return data.chart;
+        }
+
+        async function getTopMovers() {
+            // Primary: Yahoo Screener
+            const [gainers, losers] = await Promise.all([
+                getYahooScreener('gainers'),
+                getYahooScreener('losers')
+            ]);
+
+            if (gainers.length > 0 && losers.length > 0) {
+                return {
+                    gainers: gainers.slice(0, 8).map(g => ({
+                        symbol: g.symbol,
+                        price: g.regularMarketPrice,
+                        changePercent: g.regularMarketChangePercent
+                    })),
+                    losers: losers.slice(0, 8).map(l => ({
+                        symbol: l.symbol,
+                        price: l.regularMarketPrice,
+                        changePercent: l.regularMarketChangePercent
+                    }))
+                };
+            }
+
+            // Fallback: Finnhub with major stocks
+            const majorStocks = ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'JPM', 'V', 'UNH',
+                'JNJ', 'XOM', 'PG', 'HD', 'MA', 'CVX', 'MRK', 'ABBV', 'PEP', 'KO'];
+            const quotes = [];
+            for (const sym of majorStocks) {
+                const q = await getFinnhubQuote(sym);
+                if (q) quotes.push(q);
+            }
+            const sorted = [...quotes].sort((a, b) => b.changePercent - a.changePercent);
+            return {
+                gainers: sorted.filter(q => q.changePercent > 0).slice(0, 8),
+                losers: sorted.filter(q => q.changePercent < 0).sort((a, b) => a.changePercent - b.changePercent).slice(0, 8)
+            };
+        }
+
+        async function getScreenerData(filter) {
+            // Primary: Yahoo
+            const stocks = await getYahooScreener(filter);
+            if (stocks.length > 0) {
+                return stocks.slice(0, 15).map(s => ({
+                    symbol: s.symbol,
+                    price: s.regularMarketPrice,
+                    changePercent: s.regularMarketChangePercent,
+                    volume: s.regularMarketVolume
+                }));
+            }
+
+            // Fallback
+            const movers = await getTopMovers();
+            if (filter === 'losers') return movers.losers;
+            if (filter === 'active') {
+                return [...movers.gainers, ...movers.losers]
+                    .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
+                    .slice(0, 15);
+            }
+            return movers.gainers;
+        }
+
+        // ============================================
+        // AI ADVISOR
+        // ============================================
+        async function analyzeStock(symbol) {
+            const [quote, chart, recs, profile] = await Promise.all([
+                getQuote(symbol),
+                getCandles(symbol, 365),
+                getRecommendations(symbol),
+                getCompanyProfile(symbol)
+            ]);
+
+            if (!quote) {
+                return {
+                    verdict: '--',
+                    badgeClass: '',
+                    scores: { mom: 0, fund: 0, sent: 0 },
+                    reasoning: 'データ取得に失敗しました。Finnhub APIキーを確認してください。',
+                    quote: null,
+                    chart: [],
+                    profile: null
+                };
+            }
+
+            const closes = chart.map(c => c.close);
+
+            // Momentum Score
+            let momScore = 50;
+            if (closes.length >= 20) {
+                const lastPrice = closes[closes.length - 1]; // Already a number
+                const ma20 = closes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+                const ma50 = closes.length >= 50 ? closes.slice(-50).reduce((a, b) => a + b, 0) / 50 : ma20;
+                if (lastPrice > ma20) momScore += 15;
+                if (lastPrice > ma50) momScore += 10;
+
+                // RSI
+                let gains = 0, losses = 0;
+                for (let i = Math.max(1, closes.length - 14); i < closes.length; i++) {
+                    const diff = closes[i] - closes[i - 1];
+                    if (diff > 0) gains += diff;
+                    else losses -= diff;
+                }
+                const rsi = losses === 0 ? 100 : 100 - (100 / (1 + (gains / 14) / (losses / 14)));
+                if (rsi > 70) momScore -= 10;
+                else if (rsi > 50 && rsi <= 70) momScore += 10;
+            }
+            momScore = Math.max(0, Math.min(100, momScore));
+
+            // Fundamental Score (Analyst Recommendations)
+            let fundScore = 50;
+            if (recs && recs.length > 0) {
+                const latest = recs[0];
+                const buySignals = (latest.strongBuy || 0) + (latest.buy || 0);
+                const total = buySignals + (latest.strongSell || 0) + (latest.sell || 0) + (latest.hold || 0);
+                if (total > 0) fundScore = Math.round((buySignals / total) * 100);
+            }
+            fundScore = Math.max(0, Math.min(100, fundScore));
+
+            // Sentiment Score (based on price momentum)
+            let sentScore = 50;
+            if (quote.changePercent > 3) sentScore = 85;
+            else if (quote.changePercent > 1) sentScore = 70;
+            else if (quote.changePercent < -3) sentScore = 20;
+            else if (quote.changePercent < -1) sentScore = 35;
+
+            const total = momScore * 0.4 + fundScore * 0.35 + sentScore * 0.25;
+            let verdict = 'HOLD', badgeClass = 'hold';
+            if (total >= 65) {
+                verdict = 'BUY';
+                badgeClass = 'buy';
+            }
+            else if (total < 40) {
+                verdict = 'SELL';
+                badgeClass = 'sell';
+            }
+
+            const analystText = recs && recs[0] ? `アナリスト: Buy=${recs[0].buy || 0}, Hold=${recs[0].hold || 0}, Sell=${recs[0].sell || 0}。` : '';
+            let reasoning = '';
+            if (verdict === 'BUY') {
+                reasoning = `モメンタム良好(${momScore.toFixed(0)}点)。${analystText}短期〜中期の保有推奨。`;
+            } else if (verdict === 'SELL') {
+                reasoning = `モメンタム低下(${momScore.toFixed(0)}点)。${analystText}利確・損切りを検討。`;
+            } else {
+                reasoning = `方向性不明確。${analystText}決算や重要ニュースを待つのが賢明です。`;
+            }
+
+            return {
+                verdict,
+                badgeClass,
+                scores: { mom: momScore, fund: fundScore, sent: sentScore }, reasoning, quote, chart,
+            };
+        }
+
+        // ============================================
+        // NLP - 部分一致対応
+        // ============================================
+        async function extractEntities(text) {
+            if (!text.trim()) return [];
+            console.log('🧠 AI Analyzing text via Perplexity...');
+            try {
+                const response = await fetch('https://api.perplexity.ai/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${state.perplexityKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: 'sonar-reasoning-pro',
+                        messages: [
+                            {
+                                role: 'system',
+                                content: `You are a financial entity extractor. 
+                                Extract company names, mentions, or news context from the text. 
+                                Identify the primary stock ticker for each entity (e.g., AAPL for Apple, 7203.T for Toyota, RR.L for Rolls-Royce).
+                                Support informal nicknames, abbreviations, and foreign language names (e.g., "ソフバン" -> 9984.T, "メルカリ" -> 4385.T, "林檎" -> AAPL).
+                                Return ONLY a valid JSON array of strings containing the ticker symbols.`
+                            },
+                            { role: 'user', content: text }
+                        ]
+                    })
+                });
+                const data = await response.json();
+                let content = data.choices[0].message.content;
+
+                // Use regex to find the first JSON array in the text
+                const arrayMatch = content.match(/\[\s*".*?"\s*(?:,\s*".*?"\s*)*\]/s) || content.match(/\[\s*\]/);
+                if (arrayMatch) {
+                    try {
+                        return JSON.parse(arrayMatch[0]);
+                    } catch (parseError) {
+                        console.warn('Regex JSON parse failed, trying fallback substring...');
+                    }
+                }
+
+                // Fallback to substring if regex fails
+                const sIdx = content.indexOf('[');
+                const eIdx = content.lastIndexOf(']');
+                if (sIdx !== -1 && eIdx !== -1 && eIdx > sIdx) {
+                    try {
+                        return JSON.parse(content.substring(sIdx, eIdx + 1));
+                    } catch (e) {
+                        const matches = content.match(/"([A-Z0-9.]+)"/g);
+                        if (matches) return [...new Set(matches.map(m => m.replace(/"/g, '')))];
+                    }
+                }
+                return [];
+            } catch (e) {
+                console.error('AI Extraction failed:', e);
+                // Fallback to basic ticker matching if AI fails
+                const tickerMatches = text.match(/\b[A-Z]{1,5}\b/g) || [];
+                return [...new Set(tickerMatches)];
+            }
+        }
+
+        // ============================================
+        // UI HELPERS
+        // ============================================
+        function getSector(symbol) {
+            for (const [sector, tickers] of Object.entries(SECTOR_MAP)) {
+                if (tickers.includes(symbol.toUpperCase())) return sector;
+            }
+            return 'Other';
+        }
+
+        function formatChange(val) {
+            if (val == null) return '--';
+            return (val >= 0 ? '+' : '') + val.toFixed(2) + '%';
+        }
+
+        function getColor(change) {
+            if (change >= 2) return '#047857';
+            if (change >= 0) return '#10b981';
+            if (change >= -2) return '#ef4444';
+            return '#b91c1c';
+        }
+
+        function updateApiStatus() {
+            const finnEl = document.getElementById('api-finnhub');
+            finnEl.textContent = state.finnhubKey ? 'Finnhub: ✓ 設定済み' : 'Finnhub: 未設定';
+            finnEl.className = 'api-status ' + (state.finnhubKey ? 'ok' : '');
+
+            const alphaEl = document.getElementById('api-alpha');
+            alphaEl.textContent = state.alphaKey ? 'Alpha Vantage: ✓ 設定済み' : 'Alpha Vantage: 未設定';
+            alphaEl.className = 'api-status ' + (state.alphaKey ? 'ok' : '');
+        }
+
+        // ============================================
+        // RENDER
+        // ============================================
+        async function loadDashboard() {
+            // Heatmap (Sector ETFs) - Fetch individually to ensure all are retrieved
+            const heatmapEl = document.getElementById('heatmap');
+            heatmapEl.innerHTML = '<p class="loading">セクターデータ取得中...</p>';
+            const sectorETFs = ['XLK', 'XLF', 'XLV', 'XLE', 'XLY', 'XLI', 'XLU', 'XLP', 'XLRE', 'XLB', 'XLC'];
+
+            // Fetch all sectors individually to ensure complete data
+            const sectorPromises = sectorETFs.map(async (symbol) => {
+                try {
+                    const quote = await getQuote(symbol);
+                    return quote;
+                } catch (e) {
+                    console.warn(`Failed to fetch ${symbol}:`, e);
+                    return null;
+                }
+            });
+
+            const sectors = (await Promise.all(sectorPromises)).filter(s => s !== null);
+
+            if (sectors.length > 0) {
+                heatmapEl.innerHTML = sectors.map(q => {
+                    const chg = q.changePercent || 0;
+                    const sectorName = SECTOR_NAMES[q.symbol] || q.symbol;
+                    return `<div class="heatmap-tile" style="background:${getColor(chg)}" onclick="openModal('${q.symbol}')">
+                    <div class="symbol">${sectorName}</div>
+                    <div class="change">${formatChange(chg)}</div>
+                </div>`;
+                }).join('');
+            } else {
+                heatmapEl.innerHTML = '<p class="error-msg">セクターデータの取得に失敗しました。</p>';
+            }
+
+            // Gainers/Losers
+            document.getElementById('gainers-list').innerHTML = '<p class="loading">データ取得中...</p>';
+            document.getElementById('losers-list').innerHTML = '<p class="loading">データ取得中...</p>';
+
+            const movers = await getTopMovers();
+
+            if (movers.gainers.length > 0) {
+                document.getElementById('gainers-list').innerHTML = movers.gainers.slice(0, 6).map(g =>
+                    `
+                                <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer"
+                                    onclick="openModal('${g.symbol}')">
+                                    <span style="font-weight:600;color:var(--accent-blue)">${g.symbol}</span>
+                                    <span class="positive">${formatChange(g.changePercent)}</span>
+                                </div>
+                                `).join('');
+            } else {
+                document.getElementById('gainers-list').innerHTML = '<p class="loading">急騰銘柄なし</p>';
+            }
+
+            if (movers.losers.length > 0) {
+                document.getElementById('losers-list').innerHTML = movers.losers.slice(0, 6).map(l => `
+                                <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer"
+                                    onclick="openModal('${l.symbol}')">
+                                    <span style="font-weight:600;color:var(--accent-blue)">${l.symbol}</span>
+                                    <span class="negative">${formatChange(l.changePercent)}</span>
+                                </div>
+                                `).join('');
+            } else {
+                document.getElementById('losers-list').innerHTML = '<p class="loading">急落銘柄なし</p>';
+            }
+        }
+
+        async function loadScreener(filter = 'gainers') {
+            const tbody = document.getElementById('screener-body');
+
+            if (!state.finnhubKey) {
+                tbody.innerHTML = '<tr><td colspan="5" class="error-msg">Finnhub APIキーを設定してください。</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = '<tr><td colspan="5" class="loading">データ取得中...</td></tr>';
+
+            const stocks = await getScreenerData(filter);
+
+            if (stocks.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="error-msg">データなし</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = stocks.slice(0, 15).map(s => {
+                const chg = s.changePercent || 0;
+                return `<tr>
+                                    <td class="clickable-add" onclick="event.stopPropagation();addToWatchlist('${s.symbol}');this.style.background='var(--accent-green)';this.innerText='✓ Added'" style="cursor:pointer;color:var(--accent-blue);font-weight:bold" title="ウォッチリストに追加">${s.symbol}</td>
+                                    <td>$${(s.price || 0).toFixed(2)}</td>
+                                    <td class="${chg >= 0 ? 'positive' : 'negative'}">${formatChange(chg)}</td>
+                                    <td>--</td>
+                                    <td><button class="btn btn-sm btn-primary"
+                                            onclick="openModal('${s.symbol}')">詳細</button></td>
+                                </tr>`;
+            }).join('');
+        }
+
+        async function renderWatchlist(forceUpdate = false) {
+            const container = document.getElementById('watchlist-container');
+            document.getElementById('wl-count').textContent = state.watchlist.length;
+
+            if (state.watchlist.length === 0) {
+                container.innerHTML = '<p class="loading">ウォッチリストは空です。スマート入力から追加してください。</p>';
+                return;
+            }
+
+            // Group by sector
+            const grouped = {};
+            state.watchlist.forEach(sym => {
+                const sector = getSector(sym);
+                if (!grouped[sector]) grouped[sector] = [];
+                grouped[sector].push(sym);
+            });
+
+            // If we have cached data, render it immediately to avoid flicker
+            const hasAllCached = state.watchlist.every(sym => state.quoteCache[sym]);
+            if (hasAllCached || container.children.length === 0) {
+                renderWatchlistItems(grouped, container);
+            }
+
+            // Trigger proactive update in background if needed
+            if (forceUpdate || !hasAllCached) {
+                updateWatchlistData(grouped, container);
+            }
+        }
+
+        function renderWatchlistItems(grouped, container) {
+            let html = '';
+            for (const [sector, symbols] of Object.entries(grouped).sort()) {
+                html += `<div class="watchlist-section"><h4>${sector} (${symbols.length})</h4><div class="watchlist-compact">`;
+                for (const sym of symbols) {
+                    const q = state.quoteCache[sym] || { price: 0, changePercent: null };
+                    const price = q.price ? q.price.toFixed(2) : '--';
+                    const chg = q.changePercent;
+                    const chgClass = chg >= 0 ? 'positive' : (chg < 0 ? 'negative' : '');
+                    const chgText = chg != null ? formatChange(chg) : '--';
+
+                    html += `<div class="watchlist-item-wrapper" data-wl-symbol="${sym}">
+                        <div class="watchlist-item" onclick="openModal('${sym}')" style="cursor:pointer">
+                            <div style="display:flex;gap:8px;align-items:center;flex:1">
+                                <span class="sym" style="font-weight:600">${sym}</span>
+                            </div>
+                            <div style="display:flex;gap:12px;align-items:center">
+                                <span class="price ${chgClass}" style="font-size:0.9rem">$${price}</span>
+                                <span class="${chgClass}" style="font-size:0.85rem;min-width:60px;text-align:right">${chgText}</span>
+                                <span class="del" onclick="event.stopPropagation();removeFromWatchlist('${sym}')" title="削除">✕</span>
+                            </div>
+                        </div>
+                    </div>`;
+                }
+                html += '</div></div>';
+            }
+            container.innerHTML = html;
+        }
+
+        async function updateWatchlistData(grouped, container) {
+            // Fetch quotes in chunks for better performance
+            const allSymbols = state.watchlist;
+            const quotes = await getMultiQuotes(allSymbols);
+
+            quotes.forEach(q => {
+                state.quoteCache[q.symbol] = {
+                    price: q.price,
+                    changePercent: q.changePercent,
+                    timestamp: Date.now()
+                };
+            });
+
+            // Re-render items with new data
+            renderWatchlistItems(grouped, container);
+        }
+
+        // ============================================
+        // WATCHLIST PERSISTENCE
+        // ============================================
+        function saveWatchlist() {
+            localStorage.setItem('gss_watchlist', JSON.stringify(state.watchlist));
+            document.getElementById('wl-count').textContent = state.watchlist.length;
+        }
+
+        function addToWatchlist(symbol) {
+            const sym = symbol.toUpperCase();
+            if (!state.watchlist.includes(sym)) {
+                state.watchlist.push(sym);
+                saveWatchlist();
+                renderWatchlist(true); // Fetch new quote immediately
+            }
+        }
+
+        function removeFromWatchlist(symbol) {
+            state.watchlist = state.watchlist.filter(s => s !== symbol);
+            saveWatchlist();
+            renderWatchlist();
+        }
+
+        async function exportWatchlist() {
+            try {
+                const csvData = state.watchlist.join(', ');
+                const container = document.getElementById('export-link-container');
+
+                // Show a link that leads to a simple view of the CSV and a copy button
+                container.innerHTML = `
+                    <div style="margin-top:10px;padding:12px;background:rgba(255,255,255,0.05);border-radius:8px;border:1px solid rgba(255,255,255,0.1)">
+                        <p style="font-size:12px;margin-bottom:8px">📋 CSVテキスト準備完了:</p>
+                        <textarea id="csv-text-area" readonly style="width:100%;height:60px;background:#1e293b;color:#fff;border:1px solid #334155;border-radius:4px;font-size:11px;padding:5px;margin-bottom:8px">${csvData.replace("\ufeff", "")}</textarea>
+                        <button class="btn btn-sm btn-primary" onclick="copyCsvToClipboard()">テキストをコピー</button>
+                        <button class="btn btn-sm btn-outline" onclick="document.getElementById('export-link-container').innerHTML=''">閉じる</button>
+                    </div>
+                `;
+            } catch (e) {
+                console.error('Export error:', e);
+                alert('エクスポートに失敗しました。');
+            }
+        }
+
+        window.copyCsvToClipboard = function () {
+            const textarea = document.getElementById('csv-text-area');
+            textarea.select();
+            document.execCommand('copy');
+            alert('クリップボードにコピーしました！');
+        };
+
+        function importWatchlist(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const content = e.target.result.trim();
+                let tickers = [];
+
+                try {
+                    // Try to parse as JSON first
+                    const data = JSON.parse(content);
+                    if (Array.isArray(data)) tickers = data;
+                } catch (err) {
+                    // Fallback to CSV / Comma separated string
+                    tickers = content.split(/[,\s\n]+/).map(t => t.trim().toUpperCase()).filter(t => t);
+                }
+
+                if (tickers.length > 0) {
+                    processImport(tickers);
+                } else {
+                    alert('有効な銘柄データが見つかりませんでした。');
+                }
+                event.target.value = ''; // Reset input
+            };
+            reader.readAsText(file);
+        }
+
+        function importWatchlistText() {
+            console.log('✍️ importWatchlistText clicked');
+            // Small delay to ensure any active UI events clear
+            setTimeout(() => {
+                const input = prompt("インポートする銘柄をカンマ区切りで入力してください\n(例: AAPL, MSFT, RR.L):");
+                if (input) {
+                    const tickers = input.split(/[,\s\n\t]+/).map(t => t.trim().toUpperCase()).filter(t => t && t.length <= 10);
+                    if (tickers.length > 0) {
+                        processImport(tickers);
+                    }
+                }
+            }, 50);
+        }
+
+        function processImport(tickers) {
+            const cleanTickers = tickers.map(t => t.replace(/[^A-Z0-9.-]/g, '')).filter(t => t);
+            const initialCount = state.watchlist.length;
+            state.watchlist = [...new Set([...state.watchlist, ...cleanTickers])];
+            const addedCount = state.watchlist.length - initialCount;
+
+            saveWatchlist();
+            renderWatchlist();
+            alert(`${tickers.length}件を処理し、新たに${addedCount}件を追加しました。`);
+        }
+
+        // Try to load watchlist from watchlist.json on startup
+        async function loadExternalWatchlist() {
+            if (window.location.protocol === 'file:') {
+                console.log('Skipping loadExternalWatchlist on file:// protocol to avoid CORS issues.');
+                return;
+            }
+            try {
+                const resp = await fetch('watchlist.json');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (Array.isArray(data) && data.length > 0) {
+                        state.watchlist = [...new Set([...state.watchlist, ...data])];
+                        saveWatchlist();
+                    }
+                }
+            } catch (e) {
+                // File doesn't exist or error, ignore
+            }
+        }
+
+        // ============================================
+        // MODAL
+        // ============================================
+        async function openModal(symbol) {
+            const modal = document.getElementById('stock-modal');
+            modal.classList.add('show');
+
+            document.getElementById('m-symbol').textContent = symbol;
+            document.getElementById('m-name').textContent = 'Loading...';
+            document.getElementById('m-price').textContent = '--';
+            document.getElementById('m-change').textContent = '--';
+            document.getElementById('ai-verdict').textContent = '分析中...';
+            document.getElementById('ai-verdict').className = 'ai-verdict';
+            document.getElementById('score-mom').style.width = '0%';
+            document.getElementById('score-fund').style.width = '0%';
+            document.getElementById('score-sent').style.width = '0%';
+            document.getElementById('ai-reasoning').textContent = '...';
+            ['p-1w', 'p-1m', 'p-3m', 'p-6m', 'p-1y'].forEach(id => document.getElementById(id).textContent = '--');
+
+            document.getElementById('link-investing').href = `https://www.investing.com/search/?q=${symbol}`;
+            document.getElementById('link-seeking').href = `https://seekingalpha.com/symbol/${symbol}`;
+
+            const analysis = await analyzeStock(symbol);
+            currentAnalysis = analysis; // Store for AI Q&A
+
+            if (!analysis.quote) {
+                document.getElementById('m-name').textContent = 'データ取得失敗';
+                document.getElementById('ai-reasoning').textContent = analysis.reasoning;
+                return;
+            }
+
+            document.getElementById('m-name').textContent = analysis.profile?.name || symbol;
+            document.getElementById('m-price').textContent = '$' + (analysis.quote.price?.toFixed(2) || '--');
+            const chg = analysis.quote.changePercent || 0;
+            document.getElementById('m-change').textContent = formatChange(chg);
+            document.getElementById('m-change').className = chg >= 0 ? 'positive' : 'negative';
+
+            document.getElementById('ai-verdict').textContent = analysis.verdict;
+            document.getElementById('ai-verdict').className = 'ai-verdict ' + analysis.badgeClass;
+            document.getElementById('score-mom').style.width = analysis.scores.mom + '%';
+            document.getElementById('score-fund').style.width = analysis.scores.fund + '%';
+            document.getElementById('score-sent').style.width = analysis.scores.sent + '%';
+            document.getElementById('ai-reasoning').textContent = analysis.reasoning;
+
+            // Performance
+            if (analysis.chart.length > 0) {
+                const last = analysis.chart[analysis.chart.length - 1].close;
+                const calcRet = (days) => {
+                    const idx = Math.max(0, analysis.chart.length - days);
+                    const old = analysis.chart[idx]?.close;
+                    return old ? ((last - old) / old * 100) : null;
+                };
+                document.getElementById('p-1w').textContent = formatChange(calcRet(5));
+                document.getElementById('p-1m').textContent = formatChange(calcRet(21));
+                document.getElementById('p-3m').textContent = formatChange(calcRet(63));
+                document.getElementById('p-6m').textContent = formatChange(calcRet(126));
+                document.getElementById('p-1y').textContent = formatChange(calcRet(252));
+
+                // Advanced Chart
+                state.currentSymbol = symbol;
+                state.currentRange = '1Y';
+                // Reset range buttons
+                document.querySelectorAll('.range-btn').forEach(b => {
+                    b.classList.remove('active');
+                    if (b.dataset.range === '1Y') b.classList.add('active');
+                });
+
+                await renderModalChart(symbol, state.currentRange);
+            }
+        }
+
+        let currentAnalysis = null; // Store for AI Q&A
+
+        function closeModal() {
+            document.getElementById('stock-modal').classList.remove('show');
+            state.currentSymbol = null;
+            document.getElementById('ai-answer').style.display = 'none';
+            document.getElementById('ai-question').value = '';
+            currentAnalysis = null;
+        }
+
+        // AI Q&A Handler
+        document.addEventListener('DOMContentLoaded', () => {
+            const btnAskAI = document.getElementById('btn-ask-ai');
+            if (btnAskAI) {
+                btnAskAI.addEventListener('click', async () => {
+                    const question = document.getElementById('ai-question').value.trim();
+                    const answerDiv = document.getElementById('ai-answer');
+
+                    if (!question) {
+                        answerDiv.textContent = '質問を入力してください。';
+                        answerDiv.style.display = 'block';
+                        return;
+                    }
+
+                    if (!state.perplexityKey) {
+                        answerDiv.textContent = 'Perplexity APIキーが設定されていません。設定から追加してください。';
+                        answerDiv.style.display = 'block';
+                        return;
+                    }
+
+                    if (!currentAnalysis) {
+                        answerDiv.textContent = '銘柄データがありません。';
+                        answerDiv.style.display = 'block';
+                        return;
+                    }
+
+                    btnAskAI.textContent = '回答生成中...';
+                    btnAskAI.disabled = true;
+                    answerDiv.textContent = '💭 AIが最新情報を検索して回答を生成中...';
+                    answerDiv.style.display = 'block';
+
+                    try {
+                        const symbol = document.getElementById('m-symbol').textContent;
+                        const answer = await askPerplexityAI(question, symbol, currentAnalysis);
+                        answerDiv.innerHTML = `<strong>🤖 AI回答:</strong><br>${answer.replace(/\n/g, '<br>')}`;
+                    } catch (error) {
+                        answerDiv.textContent = `エラー: ${error.message}`;
+                    } finally {
+                        btnAskAI.textContent = '質問する';
+                        btnAskAI.disabled = false;
+                    }
+                });
+            }
+        });
+
+        // ============================================
+        // SETTINGS
+        // ============================================
+        function openSettings() {
+            document.getElementById('settings-modal').classList.add('show');
+            document.getElementById('input-finnhub').value = state.finnhubKey;
+            document.getElementById('input-alpha').value = state.alphaKey;
+            document.getElementById('input-perplexity').value = state.perplexityKey;
+        }
+
+        function closeSettings() { document.getElementById('settings-modal').classList.remove('show'); }
+
+        function saveSettings() {
+            state.finnhubKey = document.getElementById('input-finnhub').value.trim();
+            state.alphaKey = document.getElementById('input-alpha').value.trim();
+            state.perplexityKey = document.getElementById('input-perplexity').value.trim();
+            localStorage.setItem('gss_finnhub_key', state.finnhubKey);
+            localStorage.setItem('gss_alpha_key', state.alphaKey);
+            localStorage.setItem('gss_perplexity_key', state.perplexityKey);
+            updateApiStatus();
+            closeSettings();
+            loadDashboard();
+            loadScreener();
+        }
+
+        // ============================================
+        // INIT
+        // ============================================
+        document.addEventListener('DOMContentLoaded', async () => {
+            updateApiStatus();
+            await loadExternalWatchlist();
+            document.getElementById('wl-count').textContent = state.watchlist.length;
+
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+                    item.classList.add('active');
+                    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+                    document.getElementById('sec-' + item.dataset.section).classList.add('active');
+                    if (item.dataset.section === 'watchlist') renderWatchlist();
+                });
+            });
+
+            document.querySelector('#stock-modal .modal-close').addEventListener('click', closeModal);
+            document.querySelector('#stock-modal .modal-overlay').addEventListener('click', closeModal);
+            document.querySelector('#settings-modal .modal-overlay').addEventListener('click', closeSettings);
+
+            document.querySelectorAll('.filter-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    loadScreener(tab.dataset.filter);
+                });
+            });
+
+            document.getElementById('analyze-btn').addEventListener('click', async () => {
+                const text = document.getElementById('nlp-input').value;
+                const tagsEl = document.getElementById('extracted-tags');
+                tagsEl.innerHTML = '<span class="loading">解析中...</span>';
+
+                try {
+                    const tickers = await extractEntities(text);
+
+                    if (tickers.length === 0) {
+                        tagsEl.innerHTML = '<span class="loading">ティッカーが見つかりませんでした</span>';
+                    } else {
+                        tagsEl.innerHTML = tickers.map(t => `<span class="tag"
+                onclick="addToWatchlist('${t}');this.style.background='var(--accent-green)'">${t}</span>`).join('');
+                    }
+                } catch (err) {
+                    console.error('Analysis failed:', err);
+                    tagsEl.innerHTML = '<span class="loading">解析中にエラーが発生しました</span>';
+                }
+            });
+
+            // Image OCR functionality using Perplexity Vision (High Accuracy)
+            document.getElementById('image-upload').addEventListener('change', async (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const previewDiv = document.getElementById('image-preview');
+                const previewImg = document.getElementById('preview-img');
+                const statusP = document.getElementById('ocr-status');
+                const tagsEl = document.getElementById('extracted-tags');
+
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const base64Image = e.target.result;
+                    previewImg.src = base64Image;
+                    previewDiv.style.display = 'block';
+
+                    try {
+                        statusP.textContent = '🧠 AIが画像を解析中 (Perplexity Vision)...';
+                        tagsEl.innerHTML = '<span class="loading">解析中...</span>';
+
+                        const tickers = await extractTickersFromImageWithPerplexity(base64Image);
+
+                        if (tickers.length === 0) {
+                            tagsEl.innerHTML = '<span class="loading">銘柄が見つかりませんでした</span>';
+                            statusP.textContent = '⚠️ 画像から銘柄を特定できませんでした';
+                        } else {
+                            tagsEl.innerHTML = tickers.map(t => `<span class="tag"
+                                onclick="addToWatchlist('${t}');this.style.background='var(--accent-green)'">${t}</span>`).join('');
+                            statusP.textContent = `✅ ${tickers.length}個の銘柄を検出`;
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        statusP.textContent = '❌ AI解析に失敗しました';
+                        tagsEl.innerHTML = '';
+                    }
+                };
+                reader.readAsDataURL(file);
+            });
+
+
+            // Save default Perplexity key if not already set
+            if (!localStorage.getItem('gss_perplexity_key')) {
+                localStorage.setItem('gss_perplexity_key', state.perplexityKey);
+            }
+
+            // Advanced Chart Controls
+            document.querySelectorAll('.range-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    state.currentRange = btn.dataset.range;
+                    if (state.currentSymbol) {
+                        await renderModalChart(state.currentSymbol, state.currentRange);
+                    }
+                });
+            });
+
+            document.querySelectorAll('.chart-options input').forEach(opt => {
+                opt.addEventListener('change', async () => {
+                    if (state.currentSymbol) {
+                        await renderModalChart(state.currentSymbol, state.currentRange);
+                    }
+                });
+            });
+
+            loadDashboard();
+            loadScreener();
+            // Proactive watchlist load
+            if (state.watchlist.length > 0) {
+                const container = document.getElementById('watchlist-container');
+                const grouped = {};
+                state.watchlist.forEach(sym => {
+                    const sector = getSector(sym);
+                    if (!grouped[sector]) grouped[sector] = [];
+                    grouped[sector].push(sym);
+                });
+                updateWatchlistData(grouped, container);
+            }
+        });
+
+        window.openModal = openModal;
+        window.addToWatchlist = addToWatchlist;
+        window.removeFromWatchlist = removeFromWatchlist;
+        window.openSettings = openSettings;
+        window.closeSettings = closeSettings;
+        window.saveSettings = saveSettings;
+        window.exportWatchlist = exportWatchlist;
+        window.importWatchlist = importWatchlist;
+    </script>
+    <script src="advanced-chart.js"></script>
+    <script src="watchlist-features.js"></script>
+</body>
+
+</html>
