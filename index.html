@@ -645,16 +645,96 @@
         }
 
         @media (max-width: 768px) {
+            .app {
+                flex-direction: column;
+                height: 100vh;
+                overflow: hidden;
+            }
+
+            .sidebar {
+                display: none;
+                /* Hide traditional sidebar on mobile */
+            }
+
+            .main {
+                padding: 16px;
+                padding-bottom: 80px;
+                /* Space for bottom nav */
+                height: calc(100vh - 65px);
+            }
+
             .grid-2 {
                 grid-template-columns: 1fr;
             }
 
-            .app {
+            /* Bottom Navigation for Mobile */
+            .mobile-nav {
+                display: flex;
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                height: 65px;
+                background: var(--bg-darker);
+                border-top: 1px solid rgba(255, 255, 255, 0.1);
+                justify-content: space-around;
+                align-items: center;
+                z-index: 100;
+                padding: 0 10px;
+            }
+
+            .mobile-nav-item {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 4px;
+                color: var(--text-muted);
+                font-size: 0.65rem;
+                cursor: pointer;
+            }
+
+            .mobile-nav-item i {
+                font-size: 1.2rem;
+            }
+
+            .mobile-nav-item.active {
+                color: var(--accent-blue);
+            }
+
+            /* Adjust Modals for Mobile */
+            .modal-content {
+                width: 95%;
+                padding: 15px;
+                margin: 10px;
+            }
+
+            .modal-header {
                 flex-direction: column;
             }
 
-            .sidebar {
-                width: 100%;
+            .modal-price {
+                text-align: left;
+                margin-top: 10px;
+            }
+
+            .perf-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .heatmap-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .stock-table th:nth-child(4),
+            .stock-table td:nth-child(4) {
+                display: none;
+                /* Hide volume on mobile to save space */
+            }
+        }
+
+        @media (min-width: 769px) {
+            .mobile-nav {
+                display: none;
             }
         }
     </style>
@@ -664,7 +744,7 @@
     <div class="app">
         <nav class="sidebar">
             <div class="logo">🚀 Global AI Trade</div>
-            <div class="nav-item active" data-section="dashboard">📊 マーケット概況</div>
+            <div class="nav-item active" data-section="dashboard">📊 マーケット</div>
             <div class="nav-item" data-section="screener">🔍 スクリーナー</div>
             <div class="nav-item" data-section="smart-input">📝 スマート入力</div>
             <div class="nav-item" data-section="watchlist">⭐ ウォッチリスト (<span id="wl-count">0</span>)</div>
@@ -673,6 +753,30 @@
                 <div id="api-alpha" class="api-status">Alpha Vantage: 未設定</div>
                 <button class="btn btn-primary btn-sm" onclick="openSettings()" style="width:100%;margin-top:10px">⚙️
                     API設定</button>
+            </div>
+        </nav>
+
+        <!-- Mobile Bottom Nav -->
+        <nav class="mobile-nav">
+            <div class="mobile-nav-item active" data-section="dashboard">
+                <span>📊</span>
+                <span>概況</span>
+            </div>
+            <div class="mobile-nav-item" data-section="screener">
+                <span>🔍</span>
+                <span>検索</span>
+            </div>
+            <div class="mobile-nav-item" data-section="smart-input">
+                <span>📝</span>
+                <span>入力</span>
+            </div>
+            <div class="mobile-nav-item" data-section="watchlist">
+                <span>⭐</span>
+                <span>リスト</span>
+            </div>
+            <div class="mobile-nav-item" onclick="openSettings()">
+                <span>⚙️</span>
+                <span>設定</span>
             </div>
         </nav>
 
@@ -1963,13 +2067,20 @@
             await loadExternalWatchlist();
             document.getElementById('wl-count').textContent = state.watchlist.length;
 
-            document.querySelectorAll('.nav-item').forEach(item => {
+            function switchSection(sectionId) {
+                document.querySelectorAll('.nav-item, .mobile-nav-item').forEach(el => {
+                    el.classList.toggle('active', el.dataset.section === sectionId);
+                });
+                document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+                const targetSec = document.getElementById('sec-' + sectionId);
+                if (targetSec) targetSec.classList.add('active');
+                if (sectionId === 'watchlist') renderWatchlist();
+            }
+
+            document.querySelectorAll('.nav-item, .mobile-nav-item').forEach(item => {
                 item.addEventListener('click', () => {
-                    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-                    item.classList.add('active');
-                    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-                    document.getElementById('sec-' + item.dataset.section).classList.add('active');
-                    if (item.dataset.section === 'watchlist') renderWatchlist();
+                    const sectionId = item.dataset.section;
+                    if (sectionId) switchSection(sectionId);
                 });
             });
 
